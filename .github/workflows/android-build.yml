@@ -3,21 +3,21 @@ name: Android Build & Release
 on:
   push:
     tags:
-      - 'v*.*.*'  # 只在推送版本标签时触发
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       server_url:
-        description: 'Server URL (e.g. https://your-site.com)'
+        description: 'Server URL (e.g. https://dg.19880808.xyz:8881)'
         required: true
-        default: 'https://ednovas.video'
+        default: 'https://dg.19880808.xyz:8881'  # 👈 已改
       app_name:
         description: 'App Name'
         required: true
-        default: 'E视界'
+        default: '私人影院'                      # 👈 已改
       version_tag:
         description: 'Version Tag (e.g. v1.0.0)'
         required: true
-        default: 'v1.0.0'
+        default: 'v1.0.0'                       # 👈 已改
 
 jobs:
   build:
@@ -45,23 +45,20 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
-      # 保险措施：创建 www 目录并复制 public 内容 (防止 CLI 回退默认 www 时报错)
       - name: Prepare Web Assets
         run: |
           mkdir -p www
           if [ -d "public" ]; then
             cp -r public/* www/
           else
-            echo "<html><body>E视界</body></html>" > www/index.html
+            echo "<html><body>私人影院</body></html>" > www/index.html  # 👈 已改
           fi
           echo "Created www directory manually as fallback"
 
-      # 仅在手动触发时修改配置
       - name: Configure App (Manual Build)
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           echo "📝 Applying manual configuration..."
-          # 使用 jq 修改 JSON (ubuntu-latest 预装了 jq)
           tmp=$(mktemp)
           jq --arg url "${{ inputs.server_url }}" --arg name "${{ inputs.app_name }}" \
              '.server.url = $url | .appName = $name' capacitor.config.json > "$tmp" && mv "$tmp" capacitor.config.json
@@ -70,43 +67,38 @@ jobs:
           echo "   App Name: ${{ inputs.app_name }}"
           echo "   Server URL: ${{ inputs.server_url }}"
 
-      # 显示当前 Capacitor 配置
       - name: Show Capacitor Config
         run: |
           echo "=== Capacitor Config ==="
           cat capacitor.config.json
 
-      # 从网站图标生成 Android App 图标（各分辨率）
       - name: Generate App Icons from Website Icon
         run: |
-          # 安装 ImageMagick
           sudo apt-get update && sudo apt-get install -y imagemagick
           
-          # 源图标
           ICON_SRC="public/icon.png"
           
-          # 生成各分辨率图标
-          # mipmap-mdpi: 48x48 (Icon: 36x36)
+          # mipmap-mdpi
           convert "$ICON_SRC" -resize 36x36 -background none -gravity center -extent 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert "$ICON_SRC" -resize 36x36 -background none -gravity center -extent 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
           convert "$ICON_SRC" -resize 72x72 -background none -gravity center -extent 108x108 android/app/src/main/res/mipmap-mdpi/ic_launcher_foreground.png
           
-          # mipmap-hdpi: 72x72 (Icon: 54x54)
+          # mipmap-hdpi
           convert "$ICON_SRC" -resize 54x54 -background none -gravity center -extent 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert "$ICON_SRC" -resize 54x54 -background none -gravity center -extent 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           convert "$ICON_SRC" -resize 108x108 -background none -gravity center -extent 162x162 android/app/src/main/res/mipmap-hdpi/ic_launcher_foreground.png
           
-          # mipmap-xhdpi: 96x96 (Icon: 72x72)
+          # mipmap-xhdpi
           convert "$ICON_SRC" -resize 72x72 -background none -gravity center -extent 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert "$ICON_SRC" -resize 72x72 -background none -gravity center -extent 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
           convert "$ICON_SRC" -resize 144x144 -background none -gravity center -extent 216x216 android/app/src/main/res/mipmap-xhdpi/ic_launcher_foreground.png
           
-          # mipmap-xxhdpi: 144x144 (Icon: 108x108)
+          # mipmap-xxhdpi
           convert "$ICON_SRC" -resize 108x108 -background none -gravity center -extent 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert "$ICON_SRC" -resize 108x108 -background none -gravity center -extent 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           convert "$ICON_SRC" -resize 216x216 -background none -gravity center -extent 324x324 android/app/src/main/res/mipmap-xxhdpi/ic_launcher_foreground.png
           
-          # mipmap-xxxhdpi: 192x192 (Icon: 144x144)
+          # mipmap-xxxhdpi
           convert "$ICON_SRC" -resize 144x144 -background none -gravity center -extent 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           convert "$ICON_SRC" -resize 144x144 -background none -gravity center -extent 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
           convert "$ICON_SRC" -resize 288x288 -background none -gravity center -extent 432x432 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png
@@ -123,12 +115,8 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease
 
-      # 签名 APK
-      # 优先使用 GitHub Secrets 配置的 Release 密钥
-      # 如果未配置，自动生成并使用临时 Debug 密钥签名
       - name: Sign APK
         run: |
-          # 查找 Build Tools (优先使用较新版本)
           BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -n 1)
           APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner"
           ZIPALIGN="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign"
@@ -139,7 +127,6 @@ jobs:
           ALIGNED_APK="android/app/build/outputs/apk/release/app-release-aligned.apk"
           SIGNED_APK="android/app/build/outputs/apk/release/app-release.apk"
           
-          # 1. 密钥准备
           KEYSTORE_FILE="release.keystore"
           if [ -n "${{ secrets.SIGNING_KEY }}" ]; then
             echo "🔐 Using Release Key from Secrets"
@@ -149,7 +136,6 @@ jobs:
             KEY_PASS="${{ secrets.KEY_PASSWORD }}"
           else
             echo "⚠️ No Secrets found. Generating Debug Key for signing..."
-            # 生成临时 Debug 密钥 (Java 21 兼容格式)
             keytool -genkeypair -v \
               -keystore $KEYSTORE_FILE \
               -storetype PKCS12 \
@@ -166,11 +152,9 @@ jobs:
             KEY_PASS="android"
           fi
           
-          # 2. Zipalign 对齐 (签名可以通过，但 Release 包通常建议先对齐)
           echo "📏 Aligning APK..."
           $ZIPALIGN -v -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
           
-          # 3. 签名
           echo "✍️ Signing APK..."
           $APKSIGNER sign \
             --ks "$KEYSTORE_FILE" \
@@ -180,7 +164,6 @@ jobs:
             --out "$SIGNED_APK" \
             "$ALIGNED_APK"
           
-          # 清理
           rm "$UNSIGNED_APK" "$ALIGNED_APK" "$KEYSTORE_FILE"
           
           echo "✅ APK Signed successfully!"
@@ -206,13 +189,13 @@ jobs:
       - name: Rename APK with version
         run: |
           mv android/app/build/outputs/apk/release/app-release.apk \
-             android/app/build/outputs/apk/release/E视界-${{ steps.version.outputs.VERSION }}-universal.apk || \
-          echo "APK rename skipped"
+             android/app/build/outputs/apk/release/私人影院-${{ steps.version.outputs.VERSION }}-universal.apk || \
+          echo "APK rename skipped"  # 👈 已改
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: E视界-apk
+          name: 私人影院-apk  # 👈 已改
           path: android/app/build/outputs/apk/release/*.apk
           retention-days: 30
 
@@ -220,15 +203,15 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
-          name: "E视界 ${{ steps.version.outputs.VERSION }}"
+          name: "私人影院 ${{ steps.version.outputs.VERSION }}"  # 👈 已改
           body: |
-            ## 📦 E视界 ${{ steps.version.outputs.VERSION }}
+            ## 📦 私人影院 ${{ steps.version.outputs.VERSION }}  # 👈 已改
             
             ### 📱 Android APK 下载
             
             | 文件 | 说明 |
             |------|------|
-            | `E视界-${{ steps.version.outputs.VERSION }}-universal.apk` | 通用版 (支持所有设备) |
+            | `私人影院-${{ steps.version.outputs.VERSION }}-universal.apk` | 通用版 (支持所有设备) |  # 👈 已改
             
             ### 🖥️ 支持的 CPU 架构
             - ✅ `armeabi-v7a` (ARM 32位 - 旧手机/盒子)
@@ -242,7 +225,7 @@ jobs:
             - 📺 电视/盒子: 推荐使用电视浏览器访问网页版，兼容性更佳
             
             ### 🌐 内置服务器
-            - 默认连接: `${{ github.event.inputs.server_url || 'https://ednovas.video' }}`
+            - 默认连接: `${{ github.event.inputs.server_url || 'https://dg.19880808.xyz:8881' }}`  # 👈 已改
             
             ---
             
